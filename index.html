@@ -402,9 +402,13 @@
 
         function generateResistLayer(layers) {
             // レイヤー1と2がレジストあり（ダウンロード用はネガ出力）
+            // シルク（レイヤー5）がある部分はレジストを抜かない
             const resist = new Uint8Array(layers[0].length);
             for (let i = 0; i < resist.length; i++) {
-                resist[i] = (layers[0][i] > 0 || layers[1][i] > 0) ? 255 : 0; // ネガ: 黒=レジスト抜き
+                const hasResist = layers[0][i] > 0 || layers[1][i] > 0;
+                const hasSilk = layers[4][i] > 0;
+                // シルクがある部分はレジストを残す（ネガ出力では0=レジストあり）
+                resist[i] = (hasResist || hasSilk) ? 255 : 0; // ネガ: 黒=レジスト抜き
             }
             return resist;
         }
