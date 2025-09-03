@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基板お絵かき変換ツール</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>基板お絵かき変換ツール</h1>
+        
+        <!-- 基板色設定を非表示に（コードは残す） -->
+        <div class="input-section" style="display: none;">
+            <h2>基板色設定</h2>
+            <p>暗い色から明るい色の順に設定してください</p>
+            
+            <div class="color-input">
+                <label>レイヤー1 (最暗):</label>
+                <input type="color" id="color1" value="#000000">
+                <span>銅箔抜き+レジストあり</span>
+            </div>
+            <div class="color-input">
+                <label>レイヤー2:</label>
+                <input type="color" id="color2" value="#404040">
+                <span>銅箔あり+レジストあり</span>
+            </div>
+            <div class="color-input">
+                <label>レイヤー3:</label>
+                <input type="color" id="color3" value="#808080">
+                <span>銅箔抜き+レジスト抜き</span>
+            </div>
+            <div class="color-input">
+                <label>レイヤー4:</label>
+                <input type="color" id="color4" value="#c0c0c0">
+                <span>銅箔あり+レジスト抜き</span>
+            </div>
+            <div class="color-input">
+                <label>レイヤー5 (最明):</label>
+                <input type="color" id="color5" value="#ffffff">
+                <span>シルク</span>
+            </div>
+        </div>
+        
+        <div class="upload-area" id="uploadArea">
+            <p id="uploadText">画像をドラッグ&ドロップするか、クリックして選択してください<br><br>
+            <input type="file" id="fileInput" class="file-input" accept=".png,.jpg,.jpeg" />
+            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                ファイルを選択
+            </button>
+        </div>
+        
+        <div id="thresholdSection" class="threshold-section" style="display: none;">
+            <h2>レイヤー分離しきい値調整</h2>
+            <p>スライダーで5つのレイヤーの境界を調整できます。変更は即座にプレビューに反映されます。</p>
+            
+            <div class="unified-threshold">
+                <label>明度しきい値 (0=黒 → 255=白)</label>
+                <div class="unified-slider" id="unifiedSlider">
+                    <div class="slider-track"></div>
+                    <div class="layer-range" data-layer="0"></div>
+                    <div class="layer-range" data-layer="1"></div>
+                    <div class="layer-range" data-layer="2"></div>
+                    <div class="layer-range" data-layer="3"></div>
+                    <div class="layer-range" data-layer="4"></div>
+                    <div class="slider-handle" data-threshold="0"></div>
+                    <div class="slider-handle" data-threshold="1"></div>
+                    <div class="slider-handle" data-threshold="2"></div>
+                    <div class="slider-handle" data-threshold="3"></div>
+                </div>
+                <div class="slider-labels">
+                    <span>レイヤー1<br>銅箔抜き+レジストあり</span>
+                    <span>レイヤー2<br>銅箔あり+レジストあり</span>
+                    <span>レイヤー3<br>銅箔抜き+レジスト抜き</span>
+                    <span>レイヤー4<br>銅箔あり+レジスト抜き</span>
+                    <span>レイヤー5<br>シルク</span>
+                </div>
+                <div class="threshold-values">
+                    <div class="threshold-value">
+                        <span>境界1:</span>
+                        <input type="number" class="threshold-input" id="threshold-0" value="64" min="0" max="255">
+                    </div>
+                    <div class="threshold-value">
+                        <span>境界2:</span>
+                        <input type="number" class="threshold-input" id="threshold-1" value="128" min="0" max="255">
+                    </div>
+                    <div class="threshold-value">
+                        <span>境界3:</span>
+                        <input type="number" class="threshold-input" id="threshold-2" value="192" min="0" max="255">
+                    </div>
+                    <div class="threshold-value">
+                        <span>境界4:</span>
+                        <input type="number" class="threshold-input" id="threshold-3" value="230" min="0" max="255">
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 20px;">
+                <button onclick="resetThresholds()" style="padding: 8px 16px; font-size: 14px;">デフォルトに戻す</button>
+            </div>
+        </div>
+
+        <div id="previewSection" class="preview-section" style="display: none;">
+            <div class="layer-previews">
+                <div class="preview-item">
+                    <h3>銅箔レイヤー</h3>
+                    <canvas id="copperCanvas"></canvas>
+                    <button onclick="downloadLayer('copper')" class="download-btn">ダウンロード</button>
+                </div>
+                <div class="preview-item">
+                    <h3>レジストレイヤー (ネガ)</h3>
+                    <canvas id="resistCanvas"></canvas>
+                    <button onclick="downloadLayer('resist')" class="download-btn">ダウンロード</button>
+                </div>
+                <div class="preview-item">
+                    <h3>シルクレイヤー</h3>
+                    <canvas id="silkCanvas"></canvas>
+                    <button onclick="downloadLayer('silk')" class="download-btn">ダウンロード</button>
+                </div>
+                <div class="preview-item">
+                    <h3>元画像</h3>
+                    <canvas id="originalCanvas"></canvas>
+                </div>
+            </div>
+            <div class="main-preview">
+                <div class="preview-item">
+                    <h3>基板適用プレビュー</h3>
+                    <div class="pcb-layers">
+                        <canvas id="pcbPreviewCanvas" class="pcb-canvas"></canvas>
+                    </div>
+                    <button onclick="downloadAll()" class="download-btn-primary">全レイヤー一括ダウンロード (ZIP)</button>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <script>
+        let originalImage = null;
+        let processedLayers = {};
+        let uploadedFileName = '';
+
+        // ドラッグ＆ドロップとクリック機能を初期化
+        function initializeUpload() {
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+
+            // クリックでファイル選択（ボタン以外の部分）
+            uploadArea.addEventListener('click', (e) => {
+                if (e.target !== uploadArea.querySelector('.upload-btn')) {
+                    fileInput.click();
+                }
+            });
+
+            // ドラッグ＆ドロップ機能
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('drag-over');
+            });
+
+            uploadArea.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('drag-over');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('drag-over');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFile(files[0]);
+                }
+            });
+
+            // ファイル入力の変更イベント
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    handleFile(file);
+                }
+            });
+        }
+
+        function handleFile(file) {
+            // 画像ファイルかチェック
+            if (!file.type.startsWith('image/')) {
+                alert('画像ファイルを選択してください');
+                return;
+            }
+
+            // ファイル名を保存（拡張子を除く）
+            uploadedFileName = file.name.replace(/\.[^/.]+$/, "");
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                originalImage = new Image();
+                originalImage.onload = function() {
+                    // 画像読み込み後、即座に処理を開始
+                    processImage();
+                };
+                originalImage.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', initializeUpload);
+
+        function processImage() {
+            if (!originalImage) return;
+
+            // 元画像を表示
+            const originalCanvas = document.getElementById('originalCanvas');
+            const originalCtx = originalCanvas.getContext('2d');
+            originalCanvas.width = originalImage.width;
+            originalCanvas.height = originalImage.height;
+            originalCtx.drawImage(originalImage, 0, 0);
+
+            // 画像データを取得
+            const imageData = originalCtx.getImageData(0, 0, originalCanvas.width, originalCanvas.height);
+            const pixels = imageData.data;
+
+            // しきい値による分離を使用（初期値と統一）
+            const layers = separateImageWithUnifiedThresholds(pixels, originalCanvas.width, originalCanvas.height);
+
+            // 各レイヤーを処理して出力用データを生成
+            processedLayers.copper = generateCopperLayer(layers);
+            processedLayers.resist = generateResistLayer(layers);
+            processedLayers.silk = generateSilkLayer(layers);
+
+            // プレビューを表示（レジストはネガのまま）
+            displayLayerPreview('copperCanvas', processedLayers.copper, originalCanvas.width, originalCanvas.height);
+            displayLayerPreview('resistCanvas', processedLayers.resist, originalCanvas.width, originalCanvas.height);
+            displayLayerPreview('silkCanvas', processedLayers.silk, originalCanvas.width, originalCanvas.height);
+
+            // 基板プレビューを生成
+            generatePCBPreview(processedLayers, originalCanvas.width, originalCanvas.height);
+
+            document.getElementById('previewSection').style.display = 'grid';
+            document.getElementById('thresholdSection').style.display = 'block';
+            
+            // スライダーを初期化
+            initializeSliders();
+        }
+
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : null;
+        }
+
+        function colorDistance(color1, color2) {
+            const dr = color1.r - color2.r;
+            const dg = color1.g - color2.g;
+            const db = color1.b - color2.b;
+            return Math.sqrt(dr*dr + dg*dg + db*db);
+        }
+
+        function separateImageToLayers(pixels, width, height, targetColors) {
+            const layers = Array(5).fill().map(() => new Uint8Array(width * height));
+
+            for (let i = 0; i < pixels.length; i += 4) {
+                const pixelColor = {
+                    r: pixels[i],
+                    g: pixels[i + 1],
+                    b: pixels[i + 2]
+                };
+
+                // 最も近い色を見つける
+                let minDistance = Infinity;
+                let closestLayer = 0;
+
+                for (let j = 0; j < targetColors.length; j++) {
+                    const distance = colorDistance(pixelColor, targetColors[j]);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestLayer = j;
+                    }
+                }
+
+                const pixelIndex = Math.floor(i / 4);
+                layers[closestLayer][pixelIndex] = 255;
+            }
+
+            return layers;
+        }
+
+        function generateCopperLayer(layers) {
+            // レイヤー2と4が銅箔あり
+            const copper = new Uint8Array(layers[0].length);
+            for (let i = 0; i < copper.length; i++) {
+                copper[i] = (layers[1][i] > 0 || layers[3][i] > 0) ? 0 : 255; // 黒=銅箔あり
+            }
+            return copper;
+        }
+
+        function generateResistLayer(layers) {
+            // レイヤー1と2がレジストあり（ダウンロード用はネガ出力）
+            const resist = new Uint8Array(layers[0].length);
+            for (let i = 0; i < resist.length; i++) {
+                resist[i] = (layers[0][i] > 0 || layers[1][i] > 0) ? 255 : 0; // ネガ: 黒=レジスト抜き
+            }
+            return resist;
+        }
+
+
+        function generateSilkLayer(layers) {
+            // レイヤー5がシルク
+            const silk = new Uint8Array(layers[0].length);
+            for (let i = 0; i < silk.length; i++) {
+                silk[i] = layers[4][i] > 0 ? 0 : 255; // 黒=シルクあり
+            }
+            return silk;
+        }
+
+        function displayLayerPreview(canvasId, layerData, width, height) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            canvas.width = width;
+            canvas.height = height;
+
+            const imageData = ctx.createImageData(width, height);
+            const pixels = imageData.data;
+
+            for (let i = 0; i < layerData.length; i++) {
+                const pixelIndex = i * 4;
+                const value = layerData[i];
+                pixels[pixelIndex] = value;     // R
+                pixels[pixelIndex + 1] = value; // G
+                pixels[pixelIndex + 2] = value; // B
+                pixels[pixelIndex + 3] = 255;   // A
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        function generatePCBPreview(layers, width, height) {
+            const canvas = document.getElementById('pcbPreviewCanvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = width;
+            canvas.height = height;
+
+            // 基板色（緑）をベースに描画
+            ctx.fillStyle = '#1a5d1a';
+            ctx.fillRect(0, 0, width, height);
+
+            const imageData = ctx.createImageData(width, height);
+            const pixels = imageData.data;
+
+            for (let i = 0; i < layers.copper.length; i++) {
+                const pixelIndex = i * 4;
+                const copperValue = layers.copper[i];
+                const resistValue = layers.resist[i]; // ネガデータを使用
+                const silkValue = layers.silk[i];
+
+                let r, g, b;
+
+                // シルクが最優先（純白）
+                if (silkValue === 0) { // シルクあり
+                    r = 255; g = 255; b = 255;
+                } 
+                // レジスト抜き部分 - ネガデータでは黒=レジスト抜き
+                else if (resistValue === 0) { // レジスト抜き
+                    if (copperValue === 0) { // 銅箔あり → 銀色
+                        r = 192; g = 192; b = 192; // 銀色（銅箔むき出し）
+                    } else { // 銅箔なし → 基板素材色
+                        r = 180; g = 140; b = 90; // 基板素材色（明るめ）
+                    }
+                }
+                // レジストあり部分
+                else { // resistValue === 255
+                    if (copperValue === 0) { // 銅箔あり+レジストあり → 明るい緑（半透明効果）
+                        r = 40; g = 100; b = 40; // やや暗めの緑（レジスト越しの銅箔）
+                    } else { // 銅箔なし+レジストあり → 通常の基板色
+                        r = 15; g = 60; b = 15; // より暗いレジスト色（緑）
+                    }
+                }
+
+                pixels[pixelIndex] = r;
+                pixels[pixelIndex + 1] = g;
+                pixels[pixelIndex + 2] = b;
+                pixels[pixelIndex + 3] = 255;
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        function downloadLayer(layerType) {
+            if (!processedLayers[layerType] || !originalImage) return;
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = originalImage.width;
+            canvas.height = originalImage.height;
+
+            // キャンバスにレイヤーデータを描画
+            const imageData = ctx.createImageData(canvas.width, canvas.height);
+            const pixels = imageData.data;
+            const layerData = processedLayers[layerType];
+
+            for (let i = 0; i < layerData.length; i++) {
+                const pixelIndex = i * 4;
+                const value = layerData[i];
+                pixels[pixelIndex] = value;     // R
+                pixels[pixelIndex + 1] = value; // G
+                pixels[pixelIndex + 2] = value; // B
+                pixels[pixelIndex + 3] = 255;   // A
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+
+            canvas.toBlob(function(blob) {
+                if (!blob) {
+                    alert('画像の生成に失敗しました');
+                    return;
+                }
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const baseFileName = uploadedFileName || 'pcb_image';
+                a.download = `${baseFileName}_${layerType}.png`;
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 'image/png', 1.0);
+        }
+
+        async function downloadAll() {
+            if (!processedLayers.copper || !processedLayers.resist || !processedLayers.silk || !originalImage) {
+                alert('すべてのレイヤーが処理されていません');
+                return;
+            }
+
+            const zip = new JSZip();
+            const layerNames = {
+                copper: '銅箔レイヤー',
+                resist: 'レジストレイヤー', 
+                silk: 'シルクレイヤー'
+            };
+
+            const baseFileName = uploadedFileName || 'pcb_image';
+
+            // 各レイヤーをZIPに追加
+            for (const [layerType, layerName] of Object.entries(layerNames)) {
+                try {
+                    const blob = await createLayerBlob(layerType);
+                    if (blob) {
+                        zip.file(`${baseFileName}_${layerType}.png`, blob);
+                    }
+                } catch (error) {
+                    console.error(`${layerName}の生成に失敗:`, error);
+                }
+            }
+
+            // 基板プレビューもZIPに追加
+            try {
+                const pcbBlob = await createPCBPreviewBlob();
+                if (pcbBlob) {
+                    zip.file(`${baseFileName}_preview.png`, pcbBlob);
+                }
+            } catch (error) {
+                console.error('基板プレビューの生成に失敗:', error);
+            }
+
+            // ZIPファイルを生成してダウンロード
+            try {
+                const zipBlob = await zip.generateAsync({ 
+                    type: 'blob',
+                    compression: 'DEFLATE',
+                    compressionOptions: {
+                        level: 6
+                    },
+                    platform: 'UNIX'
+                });
+                
+                // アップロードファイル名に基づいてZIPファイル名を生成
+                const baseFileName = uploadedFileName || 'pcb_image';
+                const filename = `${baseFileName}_layers.zip`;
+                
+                const url = URL.createObjectURL(zipBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                
+                // クリーンアップを少し遅らせる
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+            } catch (error) {
+                console.error('ZIPファイルの生成に失敗:', error);
+                alert('ZIPファイルの生成に失敗しました');
+            }
+        }
+
+
+        function createLayerBlob(layerType) {
+            return new Promise((resolve) => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = originalImage.width;
+                canvas.height = originalImage.height;
+
+                // キャンバスにレイヤーデータを描画
+                const imageData = ctx.createImageData(canvas.width, canvas.height);
+                const pixels = imageData.data;
+                const layerData = processedLayers[layerType];
+
+                for (let i = 0; i < layerData.length; i++) {
+                    const pixelIndex = i * 4;
+                    const value = layerData[i];
+                    pixels[pixelIndex] = value;     // R
+                    pixels[pixelIndex + 1] = value; // G
+                    pixels[pixelIndex + 2] = value; // B
+                    pixels[pixelIndex + 3] = 255;   // A
+                }
+
+                ctx.putImageData(imageData, 0, 0);
+
+                canvas.toBlob(resolve, 'image/png', 1.0);
+            });
+        }
+
+        function createPCBPreviewBlob() {
+            return new Promise((resolve) => {
+                const sourceCanvas = document.getElementById('pcbPreviewCanvas');
+                if (!sourceCanvas) {
+                    resolve(null);
+                    return;
+                }
+
+                // 新しいキャンバスを作成してコピー
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = sourceCanvas.width;
+                canvas.height = sourceCanvas.height;
+
+                // 基板プレビューをコピー
+                ctx.drawImage(sourceCanvas, 0, 0);
+
+                canvas.toBlob(resolve, 'image/png', 1.0);
+            });
+        }
+
+        // 統合スライダー機能
+        let thresholds = [64, 128, 192, 230];
+        let dragState = { dragging: null, offset: 0 };
+
+        function initializeSliders() {
+            initializeUnifiedSlider();
+        }
+
+        function initializeUnifiedSlider() {
+            const slider = document.getElementById('unifiedSlider');
+            const handles = slider.querySelectorAll('.slider-handle');
+            
+            // 初期値を入力フィールドから取得（同期確保）
+            for (let i = 0; i < 4; i++) {
+                const input = document.getElementById(`threshold-${i}`);
+                if (input && input.value) {
+                    thresholds[i] = parseInt(input.value);
+                }
+            }
+            
+            // 初期表示を更新
+            updateUnifiedSliderDisplay();
+            updateInputValues();
+            
+            // ハンドルのドラッグ機能
+            handles.forEach((handle, index) => {
+                handle.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    dragState.dragging = index;
+                    handle.classList.add('active');
+                    
+                    const rect = slider.getBoundingClientRect();
+                    dragState.offset = e.clientX - rect.left - (thresholds[index] / 255) * rect.width;
+                    
+                    document.addEventListener('mousemove', handleUnifiedSliderMove);
+                    document.addEventListener('mouseup', handleUnifiedSliderUp);
+                });
+            });
+
+            // 入力フィールドとの同期
+            for (let i = 0; i < 4; i++) {
+                const input = document.getElementById(`threshold-${i}`);
+                input.addEventListener('input', (e) => {
+                    const value = parseInt(e.target.value);
+                    if (value >= 0 && value <= 255) {
+                        thresholds[i] = value;
+                        sortThresholds();
+                        updateUnifiedSliderDisplay();
+                        updateInputValues();
+                        updatePreviewsInRealTime();
+                    }
+                });
+            }
+        }
+
+        function handleUnifiedSliderMove(e) {
+            if (dragState.dragging === null) return;
+
+            const slider = document.getElementById('unifiedSlider');
+            const rect = slider.getBoundingClientRect();
+            const x = e.clientX - rect.left - dragState.offset;
+            const value = Math.round((x / rect.width) * 255);
+            
+            thresholds[dragState.dragging] = Math.max(0, Math.min(255, value));
+            updateUnifiedSliderDisplay();
+            updateInputValues();
+            updatePreviewsInRealTime();
+        }
+
+        function handleUnifiedSliderUp() {
+            if (dragState.dragging !== null) {
+                const handles = document.getElementById('unifiedSlider').querySelectorAll('.slider-handle');
+                handles[dragState.dragging].classList.remove('active');
+                dragState.dragging = null;
+                sortThresholds();
+                updateUnifiedSliderDisplay();
+                updateInputValues();
+            }
+            
+            document.removeEventListener('mousemove', handleUnifiedSliderMove);
+            document.removeEventListener('mouseup', handleUnifiedSliderUp);
+        }
+
+        function sortThresholds() {
+            thresholds.sort((a, b) => a - b);
+        }
+
+        function updateUnifiedSliderDisplay() {
+            const slider = document.getElementById('unifiedSlider');
+            const handles = slider.querySelectorAll('.slider-handle');
+            const ranges = slider.querySelectorAll('.layer-range');
+
+            // ハンドルの位置を更新
+            handles.forEach((handle, index) => {
+                const percentage = (thresholds[index] / 255) * 100;
+                handle.style.left = `${percentage}%`;
+            });
+
+            // レイヤー範囲を更新
+            const layerThresholds = [0, ...thresholds, 255];
+            ranges.forEach((range, index) => {
+                const leftPercent = (layerThresholds[index] / 255) * 100;
+                const rightPercent = (layerThresholds[index + 1] / 255) * 100;
+                range.style.left = `${leftPercent}%`;
+                range.style.width = `${rightPercent - leftPercent}%`;
+            });
+        }
+
+        function updateInputValues() {
+            for (let i = 0; i < 4; i++) {
+                document.getElementById(`threshold-${i}`).value = thresholds[i];
+            }
+        }
+
+        function resetThresholds() {
+            thresholds = [64, 128, 192, 230];
+            updateUnifiedSliderDisplay();
+            updateInputValues();
+            updatePreviewsInRealTime();
+        }
+
+        function updatePreviewsInRealTime() {
+            if (!originalImage) return;
+
+            // 画像データを取得
+            const originalCanvas = document.getElementById('originalCanvas');
+            const originalCtx = originalCanvas.getContext('2d');
+            const imageData = originalCtx.getImageData(0, 0, originalCanvas.width, originalCanvas.height);
+            const pixels = imageData.data;
+
+            // しきい値による分離
+            const layers = separateImageWithUnifiedThresholds(pixels, originalCanvas.width, originalCanvas.height);
+
+            // レイヤー処理
+            processedLayers.copper = generateCopperLayer(layers);
+            processedLayers.resist = generateResistLayer(layers);
+            processedLayers.silk = generateSilkLayer(layers);
+
+            // プレビュー更新
+            displayLayerPreview('copperCanvas', processedLayers.copper, originalCanvas.width, originalCanvas.height);
+            displayLayerPreview('resistCanvas', processedLayers.resist, originalCanvas.width, originalCanvas.height);
+            displayLayerPreview('silkCanvas', processedLayers.silk, originalCanvas.width, originalCanvas.height);
+
+            // 基板プレビュー更新
+            generatePCBPreview(processedLayers, originalCanvas.width, originalCanvas.height);
+        }
+
+        function separateImageWithUnifiedThresholds(pixels, width, height) {
+            const layers = Array(5).fill().map(() => new Uint8Array(width * height));
+
+            for (let i = 0; i < pixels.length; i += 4) {
+                const pixelColor = {
+                    r: pixels[i],
+                    g: pixels[i + 1],
+                    b: pixels[i + 2]
+                };
+
+                const brightness = Math.round(0.299 * pixelColor.r + 0.587 * pixelColor.g + 0.114 * pixelColor.b);
+                let assignedLayer = 0;
+
+                // しきい値で層を決定
+                for (let j = 0; j < 4; j++) {
+                    if (brightness <= thresholds[j]) {
+                        assignedLayer = j;
+                        break;
+                    }
+                    assignedLayer = j + 1;
+                }
+
+                const pixelIndex = Math.floor(i / 4);
+                layers[assignedLayer][pixelIndex] = 255;
+            }
+
+            return layers;
+        }
+    </script>
+</body>
+</html>
