@@ -1,3 +1,7 @@
+<!-- Copyright (c) 2025 DeltaV Lab all rights reserved
+ https://deltav-lab.org
+ X: @DeltaV_Lab -->
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -8,6 +12,98 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
+    <!-- Info ボタン -->
+    <div class="info-button" id="infoButton">
+        <span>i</span>
+    </div>
+
+    <!-- Info ポップアップ -->
+    <div class="info-popup" id="infoPopup">
+        <div class="info-content">
+            <div class="info-header">
+                <h3>About</h3>
+                <button class="close-btn" id="closeInfo">×</button>
+            </div>
+            <div class="info-body">
+                <div class="info-section">
+                    <h4>📋 プロジェクト情報</h4>
+                    <p>画像を基板製造用のレイヤーに自動分離するWebアプリケーションです。</p>
+                    <p><strong>バージョン:</strong> 1.0.0</p>
+                </div>
+                
+                <div class="info-section">
+                    <h4>⚖️ ライセンス</h4>
+                    <p><strong>本Webページ:</strong> MIT License</p>
+                    <button class="terms-btn" id="showTerms">利用規約を表示</button>
+
+                    <p><strong>JSZip:</strong> MIT License</p>
+                    <p class="license-text">Copyright (c) 2009-2016 Stuart Knightley, David Duponchel, Franz Buchinger, António Afonso</p>
+                    <a href="https://github.com/Stuk/jszip" target="_blank" rel="noopener">JSZip GitHub →</a>
+                    
+                </div>
+                
+                <div class="info-section">
+                    <h4>👤 作者情報</h4>
+                    <div class="author-links">
+                        <a href="https://deltav-lab.org" target="_blank" rel="noopener" class="author-link">
+                            🌐 ホームページ
+                        </a>
+                        <a href="https://x.com/DeltaV_Lab" target="_blank" rel="noopener" class="author-link">
+                            Twitter(現:𝕏) @DeltaV_Lab
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="info-section">
+                    <h4>💡 How to use</h4>
+                    <ol>
+                        <li>基板アート用の画像をアップロード</li>
+                        <li>しきい値を調整（任意）</li>
+                        <li>各レイヤーをダウンロード</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 利用規約ポップアップ -->
+    <div class="info-popup" id="termsPopup">
+        <div class="info-content">
+            <div class="info-header">
+                <h3>利用規約</h3>
+                <button class="close-btn" id="closeTerms">×</button>
+            </div>
+            <div class="info-body">
+                <div class="info-section">
+                    <h4>🔒 プライバシーポリシー</h4>
+                    <p>本アプリケーションは、アップロードされた画像をローカル環境でのみ処理し、外部サーバーに送信することはありません。すべての処理はブラウザ内で完結します。</p>
+                </div>
+                
+                <div class="info-section">
+                    <h4>📜 使用許諾</h4>
+                    <p>本ソフトウェアはMITライセンスの下で提供されています。商用・非商用問わず自由にご利用いただけます。</p>
+                    <p>ただし、本ソフトウェアの使用により生じた損害について、作者は一切の責任を負いません。</p>
+                </div>
+                
+                <div class="info-section">
+                    <h4>⚠️ 免責事項</h4>
+                    <p>本ソフトウェアは「現状のまま」提供され、動作の保証はありません。</p>
+                    <p>生成されたファイルは、実際の基板製造前に必ず検証してください。</p>
+                </div>
+                
+                <div class="info-section">
+                    <h4>🔄 更新について</h4>
+                    <p>本利用規約は予告なく変更される場合があります。</p>
+                    <p>継続してご利用いただくことで、変更後の規約に同意したものとみなします。</p>
+                </div>
+                <p>Copyright (c) 2025 DeltaV Lab</p>
+                <p><a href="https://licenses.opensource.jp/MIT/MIT.html" target="_blank" rel="noopener">MITライセンスの全文はこちら</a></p>
+
+                
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <h1>基板お絵かき変換ツール</h1>
         
@@ -136,6 +232,11 @@
         
     </div>
 
+    <!-- フッター -->
+    <footer class="footer">
+        <p>© 2024 基板お絵かき変換ツール - All rights reserved</p>
+    </footer>
+
     <script>
         let originalImage = null;
         let processedLayers = {};
@@ -205,8 +306,6 @@
             reader.readAsDataURL(file);
         }
 
-        // 初期化
-        document.addEventListener('DOMContentLoaded', initializeUpload);
 
         function processImage() {
             if (!originalImage) return;
@@ -727,6 +826,69 @@
 
             return layers;
         }
+
+        // Info ポップアップ機能
+        function initializeInfoPopup() {
+            const infoButton = document.getElementById('infoButton');
+            const infoPopup = document.getElementById('infoPopup');
+            const closeInfo = document.getElementById('closeInfo');
+            const showTerms = document.getElementById('showTerms');
+            const termsPopup = document.getElementById('termsPopup');
+            const closeTerms = document.getElementById('closeTerms');
+
+            // Info ボタンクリックでポップアップを表示
+            infoButton.addEventListener('click', () => {
+                infoPopup.style.display = 'flex';
+            });
+
+            // 閉じるボタンでポップアップを非表示
+            closeInfo.addEventListener('click', () => {
+                infoPopup.style.display = 'none';
+            });
+
+            // 背景クリックでポップアップを非表示
+            infoPopup.addEventListener('click', (e) => {
+                if (e.target === infoPopup) {
+                    infoPopup.style.display = 'none';
+                }
+            });
+
+            // 利用規約ボタンクリックで利用規約ポップアップを表示
+            showTerms.addEventListener('click', () => {
+                infoPopup.style.display = 'none';
+                termsPopup.style.display = 'flex';
+            });
+
+            // 利用規約の閉じるボタン
+            closeTerms.addEventListener('click', () => {
+                termsPopup.style.display = 'none';
+            });
+
+            // 利用規約ポップアップの背景クリック
+            termsPopup.addEventListener('click', (e) => {
+                if (e.target === termsPopup) {
+                    termsPopup.style.display = 'none';
+                }
+            });
+
+            // ESCキーでポップアップを非表示
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (infoPopup.style.display === 'flex') {
+                        infoPopup.style.display = 'none';
+                    }
+                    if (termsPopup.style.display === 'flex') {
+                        termsPopup.style.display = 'none';
+                    }
+                }
+            });
+        }
+
+        // DOMContentLoaded時に初期化
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeUpload();
+            initializeInfoPopup();
+        });
     </script>
 </body>
 </html>
